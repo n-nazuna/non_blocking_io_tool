@@ -89,19 +89,19 @@ class ATA_PASS_THROUGH_16:
 
 def send_ata_pass_through(dev_path):
     cdb_obj = ATA_PASS_THROUGH_16()
-    cdb_obj.protocol = 6 # DMA
+    cdb_obj.protocol = 12 # FPDMA
     cdb_obj.extend = 1
     cdb_obj.ck_cond = 1  # Check condition
     cdb_obj.t_dir = 1  # Device -> Host
     cdb_obj.byt_blok = 1
-    cdb_obj.t_length = 1  # Transfer length in 512-byte blocks
+    cdb_obj.t_length = 2  # Transfer length in 512-byte blocks
 
-    cdb_obj.features = 0x0
-    cdb_obj.sector_count = 1
+    cdb_obj.features = 0x8
+    cdb_obj.sector_count = 0
     cdb_obj.lba = 0x100
 
-    cdb_obj.device = 0x40
-    cdb_obj.command = 0x25  # READ DMA
+    cdb_obj.device = 0x00
+    cdb_obj.command = 0x60
     cdb_obj.control = 0
 
     cdb_bytes = cdb_obj.to_bytes()
