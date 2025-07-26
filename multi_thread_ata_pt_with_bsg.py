@@ -11,6 +11,19 @@ ATA_PASS_THROUGH_16 = [
     0x00, 0x40, 0x60, 0x00
 ]
 
+ATA_PASS_THROUGH_32 = [
+    # 16
+    0x7F, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x18,
+    0x1F, 0xF0, 0x00, 0x19,
+    0x2E, 0x40, 0x60, 0x00,
+    # 32
+    0x00, 0x00, 0x00, 0x00,
+    0x01, 0x00, 0x00, 0x00,
+    0x40, 0x60, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+]
+
 class sg_io_v4(ctypes.Structure):
     _fields_ = [
         ('guard', ctypes.c_int32),
@@ -50,7 +63,8 @@ class sg_io_v4(ctypes.Structure):
 
 def executer(fd,tag):
         # CDBの準備
-        ATA_PASS_THROUGH_16[6] = tag << 3  # タグを設定
+        # ATA_PASS_THROUGH_16[6] = tag << 3  # タグを設定
+        ATA_PASS_THROUGH_32[23] = tag << 3  # タグを設定
         cdb_buf = (ctypes.c_ubyte * 16)(*ATA_PASS_THROUGH_16)
         sense_buf = (ctypes.c_ubyte * 32)()
         data_buf = (ctypes.c_ubyte * 512)()  # 例: 512バイト読み取り
@@ -88,4 +102,4 @@ def send_ata_pt_via_bsg(dev_path):
         t.join()
     os.close(fd)
 
-send_ata_pt_via_bsg("/dev/bsg/1:0:0:0")  # bsgデバイスのパスは環境に応じて
+send_ata_pt_via_bsg("/dev/bsg/0:0:0:0")  # bsgデバイスのパスは環境に応じて
