@@ -1,6 +1,6 @@
 
 from enum import Enum, auto
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 class xfer_protocol(Enum):
     non_data = auto()
@@ -18,11 +18,11 @@ class xfer_protocol(Enum):
     def get_protocol(self):
         if self == xfer_protocol.non_data:
             return xfer_protocol.non_data
-        elif self in ( xfer_protocol.read_pio or xfer_protocol.write_pio):
+        elif self in ( xfer_protocol.read_pio , xfer_protocol.write_pio):
             return xfer_protocol.pio
-        elif self in ( xfer_protocol.read_dma or xfer_protocol.write_dma):
+        elif self in ( xfer_protocol.read_dma , xfer_protocol.write_dma):
             return xfer_protocol.dma
-        elif self in ( xfer_protocol.read_fpdma or xfer_protocol.write_fpdma):
+        elif self in ( xfer_protocol.read_fpdma , xfer_protocol.write_fpdma):
             return xfer_protocol.fpdma
 
 @dataclass
@@ -36,6 +36,7 @@ class ATA_COMMAND:
     command: int = 0
     protocol: xfer_protocol = xfer_protocol.non_data
     transfer_length: int = 0
+    transfer_data: bytes = field(default_factory=list)
     is_512_block: bool = False
     ext_command: bool = True
     def __post_init__(self):
@@ -67,9 +68,7 @@ class ATA_COMMAND:
                 raise ValueError(f"command must be in range 0-255, got {self.command}")
             if not (self.icc or self.auxiliary):
                 raise ValueError(f"icc and auxiliary must be 0 when ext_command is False, got icc={self.icc}, auxiliary={self.auxiliary}")
-        if not (self.protocol == xfer_protocol.pio or
-                self.protocol == xfer_protocol.dma or
-                self.protocol == xfer_protocol.fpdma):
+        if      self.protocol in ( xfer_protocol.pio , xfer_protocol.dma , xfer_protocol.fpdma):
             raise ValueError(f"protocol must be specified xfer direction, got {self.protocol}")
 if __name__ == "__main__":
     pass
