@@ -125,7 +125,7 @@ def send_ata_pass_through(dev_path):
 
     fd = os.open(dev_path, os.O_RDONLY | os.O_DIRECT)
     try:
-        for _ in range(1000):
+        for _ in range(1):
             fcntl.ioctl(fd, SG_IO, hdr)
             print("Command sent.")
             print("Status:", hdr.status)

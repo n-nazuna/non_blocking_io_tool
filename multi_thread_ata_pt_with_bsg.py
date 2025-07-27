@@ -5,19 +5,6 @@ import threading
 
 SG_IO = 0x2285
 
-# ATA_PASS_THROUGH_32 = [
-#     # 16
-#     0x7F, 0x00, 0x00, 0x00,
-#     0x00, 0x00, 0x00, 0x18,
-#     0x1F, 0xF0, 0x00, 0x19,
-#     0x2E, 0x40, 0x60, 0x00,
-#     # 32
-#     0x00, 0x00, 0x00, 0x00,
-#     0x01, 0x00, 0x00, 0x00,
-#     0x40, 0x60, 0x00, 0x00,
-#     0x00, 0x00, 0x00, 0x00,
-# ]
-
 from dataclasses import dataclass
 
 @dataclass
@@ -180,6 +167,7 @@ def print_hex_dump(data: bytes, width: int = 4):
 
 def executer(fd,tag):
         # CDBの準備
+        import random
         ata_pt = ATA_PASS_THROUGH_32()
         ata_pt.protocol = 0xC # FPDMA
         ata_pt.extend = True  # 48 bit LBA Command
@@ -190,26 +178,26 @@ def executer(fd,tag):
         ata_pt.byt_blok = True  # ブロックモードを有効にする
         ata_pt.t_length = 2 # FEATURES Fieldを転送長として使用
 
-        ata_pt.features = 0x01  # 例: 1セクタ読み取り
-        ata_pt.sector_count = tag << 3 # タグを設定
-        ata_pt.lba = 0x1 + tag
+        ata_pt.features = 0x8 # Xfer Block Lengthを設定
+        ata_pt.sector_count = tag << 3 # tagを設定
+        ata_pt.lba = random.randint(0, 0x00FF_FFFF) * 8 # Aligned LBAから適当に選ぶ
         ata_pt.device = 0x40 # 規格に書いてあるから
-        ata_pt.command = 0x60  # ATA READ FPDMA QUEUED
+        ata_pt.command = 0x60 # READ FPDMA QUEUED の Command Code
 
-        print_hex_dump(ata_pt.cdb(), width=4)
+        # print_hex_dump(ata_pt.cdb(), width=4)
         cdb_buf = (ctypes.c_ubyte * 32)(*ata_pt.cdb())
         sense_buf = (ctypes.c_ubyte * 32)()
-        data_buf = (ctypes.c_ubyte * 512)()  # 例: 512バイト読み取り
+        data_buf = (ctypes.c_ubyte * 4096)()
 
         io = sg_io_v4()
         io.guard = ord('Q')
         io.protocol = 0  # BSG_PROTOCOL_SCSI
         io.subprotocol = 0  # BSG_SUB_PROTOCOL_SCSI_COMMAND
-        io.request_len = 16
+        io.request_len = 32
         io.request = ctypes.addressof(cdb_buf)
         io.max_response_len = 32
         io.response = ctypes.addressof(sense_buf)
-        io.din_xfer_len = 512
+        io.din_xfer_len = 4096
         io.din_xferp = ctypes.addressof(data_buf)
         io.timeout = 5000
         io.flags = 0
@@ -220,13 +208,33 @@ def executer(fd,tag):
         print(f"driver_status: {io.driver_status}")
         print(f"device_status: {io.device_status}")
         print(f"transport_status: {io.transport_status}")
-        print(f"response data (ascii): {''.join(chr(b) if 32 <= b < 127 else '.' for b in data_buf[:512])}")
+        print(" --- response data head 512 bytes begin (ascii) --- ")
+        print_dwords_4_with_ascii(data_buf[:512])
+        print(" --- response data head 512 bytes end   (ascii) --- ")
+
+def print_dwords_4_with_ascii(data):
+    # 必要なら list → bytes に変換
+    if isinstance(data, list):
+        data = bytes(data)
+
+    padded_data = data + b'\x00' * ((4 - len(data) % 4) % 4)
+
+    dwords = [int.from_bytes(padded_data[i:i+4], 'little') for i in range(0, len(padded_data), 4)]
+
+    for i in range(0, len(dwords), 4):
+        dw_line = dwords[i:i+4]
+        hex_part = ' '.join(f"{dw:08X}" for dw in dw_line)
+
+        ascii_bytes = data[i*4:i*4+16]
+        ascii_part = ''.join(chr(b) if 32 <= b <= 126 else '.' for b in ascii_bytes)
+
+        print(f"{hex_part:<40} {ascii_part}")
 
 def send_ata_pt_via_bsg(dev_path):
     fd = os.open(dev_path, os.O_RDONLY|os.O_NONBLOCK)
 
     threads = []
-    for tag in range(32):
+    for tag in range(1):
         t = threading.Thread(target=executer, args=(fd,tag,))
         threads.append(t)
         t.start()
@@ -234,4 +242,4 @@ def send_ata_pt_via_bsg(dev_path):
         t.join()
     os.close(fd)
 
-send_ata_pt_via_bsg("/dev/bsg/0:0:0:0")  # bsgデバイスのパスは環境に応じて
+send_ata_pt_via_bsg("/dev/bsg/1:0:0:0")  # bsgデバイスのパスは環境に応じて
