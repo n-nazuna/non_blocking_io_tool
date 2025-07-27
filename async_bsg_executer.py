@@ -247,18 +247,19 @@ class bsg_with_ata_command_executor:
             fcntl.ioctl(self.fd, SG_IO, sg_io) # 
             command.transfer_data = bytes(data_buf)
         else:
-            print("Writing data to device...")
             sg_io.dout_xfer_len = command.transfer_length
             data_buf = (ctypes.c_ubyte * command.transfer_length).from_buffer_copy(command.transfer_data)
             sg_io.dout_xferp = ctypes.addressof(data_buf)
             fcntl.ioctl(self.fd, SG_IO, sg_io)
 
     def submit_command(self, command: ATA_COMMAND):
-            io = threading.Thread(target=self._executer, args=(command,))
-            print(hex(command.command) + " " + hex(command.command))
-            self.io_thread.append(command)
-            io.start()
-            io.join()
+        io = threading.Thread(target=self._executer, args=(command,))
+        self.io_thread.append(io)
+        io.start()
+    def drain_command(self):
+        for thread in self.io_thread:
+            thread.join()
+
 
 def print_dwords_4_with_ascii(data):
     # 必要なら list → bytes に変換
@@ -278,11 +279,12 @@ def print_dwords_4_with_ascii(data):
 
         print(f"{hex_part:<40} {ascii_part}")
 if __name__ == "__main__":
+    import random
     # Example usage
     dev_path = "/dev/bsg/1:0:0:0"  # Adjust the path as needed
     executer = bsg_with_ata_command_executor(dev_path)
 
-    command = ATA_COMMAND(
+    commands = [ATA_COMMAND(
         feature=0x8,
         lba=0x1,
         icc=0,
@@ -291,7 +293,11 @@ if __name__ == "__main__":
         command=0x60,
         protocol=xfer_protocol.read_fpdma,
         transfer_length=4096
-    )
-    executer.submit_command(command)
-    print_dwords_4_with_ascii(command.transfer_data[:512])  # Print first 512 bytes of transfer data
+    ) for _ in range(32)]  # これで全部独立なオブジェクト
+    for i in range(len(commands)):
+        commands[i].count = i << 3
+        commands[i].lba = random.randint(0, 0x00FF_FFFF) * 8 # Aligned LBAから適当に選ぶ
+        executer.submit_command(commands[i])
+    executer.drain_command()
+    print_dwords_4_with_ascii(commands[30].transfer_data[:512])  # Print first 512 bytes of transfer data
 
